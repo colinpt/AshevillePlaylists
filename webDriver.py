@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from lxml import etree
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support.expected_conditions import staleness_of
 from selenium.common.exceptions import NoSuchElementException
@@ -31,7 +31,9 @@ def getSpotifyAuthCode(creds: dict) -> str:
     }
 
     url = "https://accounts.spotify.com/authorize?" + requests.compat.urlencode(query_params)
-    driver = webdriver.Chrome(ChromeDriverManager().install())
+    service = Service()
+    options = webdriver.ChromeOptions()
+    driver = webdriver.Chrome(service=service, options=options)
     driver.get(url)
     driver.find_element('id', 'login-username').send_keys(creds['spotifyUsername'])
     driver.find_element('id', 'login-password').send_keys(creds['spotifyPassword'])

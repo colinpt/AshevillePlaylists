@@ -1,13 +1,18 @@
 from dbHelpers import *
 from datetime import datetime, timedelta
 from fuzzywuzzy import fuzz
-import re
+from spotify import *
+from logger import log
+import re, string
 
 def parseArtistName(artistName: str) -> str:
-    splitStrings = ['-', '–', ':', '+', '(', 'featuring']
+    splitStrings = [' - ', ' – ', ':', '+', '(', 'Featuring'] #If any of these characters appear, take the string from the left of it.
+    parsedArtistName = string.capwords(artistName.lower()) #Standardize capitalization
     for splitString in splitStrings:
-        artistName = artistName.split(splitString)[0].strip()
-    return artistName
+        parsedArtistName = parsedArtistName.split(splitString)[0].strip()
+    if artistName.lower() != parsedArtistName.lower(): 
+        log.info(f'Artist name modified: "{artistName}" -> "{parsedArtistName}"')
+    return parsedArtistName
 
 def artistNameIsMatch(s1: str, s2: str, minConfidence: int) -> bool:
     s1 = re.sub('\bthe\b', '', s1)
@@ -20,7 +25,7 @@ def parseTracks(tracks: list[str]) -> list[str]:
 def getCurrentDateString() -> str:
     return datetime.today().strftime('%Y-%m-%d')
 
-def addDaysToDateString(dateString: str, daysToAdd: int) -> str:
+def addDatePartsToDateString(dateString: str, daysToAdd: int) -> str:
     date = datetime.strptime(dateString, '%Y-%m-%d')
     return (date + timedelta(days=daysToAdd)).strftime('%Y-%m-%d')
 
@@ -62,23 +67,35 @@ def getArtistDataByArtistName(artistName: str) -> dict:
 
 def insertNewArtistIfValid(conn: sqlite3.Connection, artistName: str, excludedGenres: list[str], excludedKeywords: list[str]) -> str:
     if any(keyword.lower() in artistName.lower() for keyword in excludedKeywords):
+        log.info(f'Artist "{artistName}" rejected - contains excluded keyword')
         return '-1'
-    artistData = getArtistDataByArtistName(parseArtistName(artistName))
-    if artistData['artistId'] != '-1' and not anySubstringInListOfStrings(excludedGenres, artistData['genres']):
+    parsedArtistName = parseArtistName(artistName)
+    artistData = getArtistDataByArtistName(parsedArtistName)
+    if artistData['artistId'] == '-1': 
+        log.info(f'Artist "{parsedArtistName}" rejected - artist not found in Spotify')
+        spotifyArtistID = '-1'
+    elif anySubstringInListOfStrings(excludedGenres, artistData['genres']):
+        log.info(f'Artist "{parsedArtistName}" rejected - artist has excluded genre')
+        spotifyArtistID = '-1'
+    else:
         if not getArtistById(conn, artistData['artistId']):
             insertArtist(conn, artistData['artistId'], artistData['artistName'])
-        spotifyArtistID = artistData['artistId']
-    else:
-        spotifyArtistID = '-1'
+        spotifyArtistID = artistData['artistId']  
+        log.info(f'Artist "{parsedArtistName}" accepted - id: {spotifyArtistID}')
     return spotifyArtistID
 
 def insertNewShowIfValid(conn: sqlite3.Connection, venueId: int, artistId: str, date: str) -> str:
     today = getCurrentDateString()
-    dateLimit = addDaysToDateString(today, 60)
+    dateLimit = addDatePartsToDateString(today, 90)
     shows = getShowsByShowData(conn, venueId, artistId)
-    if shows or not dateInRange(date, today, dateLimit):
+    if shows:
+        log.info(f'Show rejected - artistId "{artistId}" show already exists')
+        showId = '-1'  
+    elif not dateInRange(date, today, dateLimit):
+        log.info(f'Show rejected - artistId "{artistId}" on {date} is outside date range')
         showId = '-1'
     else:
+        log.info(f'Show accepted - artistId "{artistId}"')
         showId = insertShow(conn, venueId, artistId, date)
     return showId
 
@@ -93,18 +110,15 @@ def insertShowSongs(conn: sqlite3.Connection, showId: int, tracks: list[dict]) -
         songIds.append(songId)
         insertSongIfNew(conn, songId, tracks[i]['name'])
         insertShowSong(conn, showId, songId)
-
     return songIds
 
 def clearOldSongsFromPlaylist(conn: sqlite3.Connection, playlistId: str) -> None:
-    date = getCurrentDateString()
-    showData = getVenueShowsBeforeDate(conn, playlistId, date)
+    showData = getVenueShowsBeforeDate(conn, playlistId, getCurrentDateString())
     for show in showData:
         showId = show['ShowID']
         songData = getSongsByShowId(conn, showId)
-        for song in songData:
-            showSongId = song['ShowSongID']
-            tracks = parseTracks([song['SongID']])
-            removeTracksFromPlaylist(tracks, playlistId)
-            deleteShowSong(conn, showSongId)
+        log.info(f'Show "{showId}" date has passed - deleting songs')
+        parsedTracks = parseTracks([song['SongID'] for song in songData])
+        removeTracksFromPlaylist([{'uri' : parsedTrack} for parsedTrack in parsedTracks], playlistId)
+        deleteShowSongs(conn, showId)
         deleteShow(conn, showId)

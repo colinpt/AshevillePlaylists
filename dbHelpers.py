@@ -84,9 +84,9 @@ def deleteShow(conn: sqlite3.Connection, showId: int) -> None:
     c.execute(query, args)
     conn.commit()
 
-def deleteShowSong(conn: sqlite3.Connection, showSongId: int) -> None:
-    query = 'update ShowSongs set DeletedOn = current_timestamp where id = ?'
-    args = [showSongId]
+def deleteShowSongs(conn: sqlite3.Connection, showId: int) -> None:
+    query = 'update ShowSongs set DeletedOn = current_timestamp where ShowID = ?'
+    args = [showId]
     c = conn.cursor()
     c.execute(query, args)
     conn.commit()

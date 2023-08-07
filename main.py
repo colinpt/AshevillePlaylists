@@ -6,15 +6,14 @@ from webDriver import getSpotifyAuthCode
 import venues.OrangePeel as OrangePeel
 import venues.GreyEagle as GreyEagle
 import venues.SalvageStation as SalvageStation
-import sqlite3, json
+import sqlite3, json, os
+
+keywordExclusions = ['tribute', 'comedy', 'festival', 'burlesque', 'postponed', 'canceled',]
+genreExclusions = ['comedy']
 
 if __name__ == '__main__':
-  
-    with open('./creds.json', 'r') as f:
-        creds = json.load(f)
-
-    keywordExclusions = ['tribute', 'comedy', 'festival', 'burlesque']
-    genreExclusions = ['comedy']
+    with open(os.path.join(os.getcwd(), 'creds.json'), 'r') as file:
+        creds = json.load(file)
 
     venueData = [
         {
@@ -42,7 +41,7 @@ if __name__ == '__main__':
     # resetDB()
     # resetPlaylists([venue['playlistId'] for venue in venueData])
 
-    conn = sqlite3.connect('AshevilleMusic')
+    conn = sqlite3.connect(os.path.join(os.getcwd(), 'AshevilleMusic'))
     conn.row_factory = sqlite3.Row
 
     for venue in venueData:

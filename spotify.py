@@ -6,13 +6,7 @@ def makeRequest(method: str, url: str, headers=None, data=None, json=None, param
         response = requests.request(method, url, headers=headers, data=data, json=json, params=params)
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        raise e
-    except requests.exceptions.ConnectionError as e:
-        raise e
-    except requests.exceptions.Timeout as e:
-        raise e
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         raise e
 
 def header(t:str) -> str:

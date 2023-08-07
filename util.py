@@ -1,15 +1,17 @@
 from spotify import *
 from dbHelpers import *
 from helpers import *
+from logger import log
 import sqlite3
 import os
 
 def resetDB() -> None:
     os.remove('AshevilleMusic')
+    log.info('DATABASE DELETED')
     conn = sqlite3.connect('AshevilleMusic')
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-
+    
     with open('.\\db.sql', 'r') as f:
         sql = f.read()
     
@@ -24,18 +26,16 @@ def resetPlaylists(playlistIds: list[str]) -> None:
         offset = 0
         playlist = getPlaylistTracks(playlistId, offset=offset)
         totalTracks = playlist['total']
-        tracks = []
-        while totalTracks - offset > 100:
-            for item in playlist['items']:
-                tracks.append(item['track']['id'])
-                if len(tracks) == 100: #Spotify can only remove 100 tracks at a time
-                    offset += 100
-                    playlist = getPlaylistTracks(playlistId, offset=offset)
-                    parsedTracks = parseTracks(tracks)
-                    removeTracksFromPlaylist([{'uri' : parsedTrack} for parsedTrack in parsedTracks], playlistId)
-                    tracks = []
+        log.info(f'Playlist "{playlistId}" has {totalTracks} tracks')
+        while totalTracks > 0:
+            tracks = [item['track']['id'] for item in playlist['items']]
+            parseTracksAndRemove(tracks, playlistId)
+            totalTracks -= len(tracks)
+            if totalTracks > 0:
+                offset += 100
+                playlist = getPlaylistTracks(playlistId, offset=offset)
 
-        parsedTracks = parseTracks(tracks)
-        removeTracksFromPlaylist([{'uri' : parsedTrack} for parsedTrack in parsedTracks], playlistId)
-    return
-
+def parseTracksAndRemove(tracks: list[str], playlistId: str) -> None:
+    parsedTracks = parseTracks(tracks)
+    log.info(f'removing {len(tracks)} tracks from playlist "{playlistId}"')
+    removeTracksFromPlaylist([{'uri' : parsedTrack} for parsedTrack in parsedTracks], playlistId)
